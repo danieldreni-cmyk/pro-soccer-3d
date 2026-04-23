@@ -1,19 +1,16 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>3D Soccer - Pro Edition</title>
+    <title>3D Soccer - 11 vs 11 Pro</title>
     <style>
-        body { margin: 0; background-color: #000; overflow: hidden; font-family: sans-serif; }
-        #scoreboard { position: absolute; top: 10px; width: 100%; text-align: center; color: white; font-size: 24px; z-index: 100; font-weight: bold; }
+        body { margin: 0; background-color: #000; overflow: hidden; font-family: 'Arial Black', sans-serif; }
+        #scoreboard { position: absolute; top: 10px; width: 100%; text-align: center; color: white; font-size: 28px; z-index: 100; text-shadow: 2px 2px #000; pointer-events: none; }
     </style>
 </head>
 <body>
-    <div id="scoreboard">YOU: <span id="pScore">0</span> | AI: <span id="aScore">0</span></div>
-    
+    <div id="scoreboard">HOME: <span id="pScore">0</span> | GUEST: <span id="aScore">0</span></div>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
-
     <script>
-        // 1. Scene Setup
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x87CEEB);
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -21,29 +18,56 @@
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
 
-        // 2. Pitch
-        const pitch = new THREE.Mesh(new THREE.PlaneGeometry(60, 100), new THREE.MeshBasicMaterial({ color: 0x2e7d32 }));
-        pitch.rotation.x = -Math.PI / 2;
-        scene.add(pitch);
+        const sun = new THREE.DirectionalLight(0xffffff, 1); sun.position.set(10, 20, 10); scene.add(sun);
+        scene.add(new THREE.AmbientLight(0xffffff, 0.5));
 
-        // 3. Ball
-        const ball = new THREE.Mesh(new THREE.SphereGeometry(0.5, 16, 16), new THREE.MeshBasicMaterial({ color: 0xffffff }));
-        ball.position.y = 0.5;
-        scene.add(ball);
+        // PITCH & BOUNDARIES
+        const pitchWidth = 60, pitchHeight = 100;
+        const pitch = new THREE.Mesh(new THREE.PlaneGeometry(pitchWidth, pitchHeight), new THREE.MeshStandardMaterial({ color: 0x2e7d32 }));
+        pitch.rotation.x = -Math.PI / 2; scene.add(pitch);
+
+        // BENCHES
+        function createBench(x, color) {
+            const bench = new THREE.Mesh(new THREE.BoxGeometry(2, 1, 15), new THREE.MeshStandardMaterial({color: 0x555555}));
+            bench.position.set(x, 0.5, 0); scene.add(bench);
+            for(let i=0; i<5; i++) {
+                const sub = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.5, 0.8), new THREE.MeshStandardMaterial({color: color}));
+                sub.position.set(x, 1.2, -5 + (i*2.5)); scene.add(sub);
+            }
+        }
+        createBench(-32, 0xff0000); createBench(32, 0x0000ff);
+
+        // GOALS
+        function createGoal(z) {
+            const group = new THREE.Group();
+            const postMat = new THREE.MeshStandardMaterial({color: 0xffffff});
+            const p1 = new THREE.Mesh(new THREE.BoxGeometry(0.5, 5, 0.5), postMat); p1.position.set(-6, 2.5, 0);
+            const p2 = new THREE.Mesh(new THREE.BoxGeometry(0.5, 5, 0.5), postMat); p2.position.set(6, 2.5, 0);
+            const top = new THREE.Mesh(new THREE.BoxGeometry(12, 0.5, 0.5), postMat); top.position.set(0, 5, 0);
+            const net = new THREE.Mesh(new THREE.BoxGeometry(12, 5, 2), new THREE.MeshStandardMaterial({color: 0xffffff, wireframe: true, transparent: true, opacity: 0.3}));
+            net.position.set(0, 2.5, z > 0 ? 1 : -1);
+            group.add(p1, p2, top, net); group.position.z = z; scene.add(group);
+        }
+        createGoal(50); createGoal(-50);
+
+        // BALL
+        const ball = new THREE.Mesh(new THREE.SphereGeometry(0.4, 32, 32), new THREE.MeshStandardMaterial({ color: 0xffffff }));
+        ball.position.y = 0.4; scene.add(ball);
         let ballVel = new THREE.Vector3();
 
-        // 4. Players
-        const player = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), new THREE.MeshBasicMaterial({ color: 0xff0000 }));
-        player.position.set(0, 1, 20);
-        scene.add(player);
+        // 11 vs 11 PLAYERS
+        const players = [];
+        function addTeam(color, startZ, isUser) {
+            for(let i=0; i<11; i++) {
+                const p = new THREE.Mesh(new THREE.CapsuleGeometry(0.4, 0.8), new THREE.MeshStandardMaterial({ color: color }));
+                p.position.set((Math.random()-0.5)*40, 1, startZ + (Math.random()-0.5)*20);
+                p.userData = { isUser: isUser && i===0, team: color, vel: new THREE.Vector3() };
+                scene.add(p); players.push(p);
+            }
+        }
+        addTeam(0xff0000, 20, true); addTeam(0x0000ff, -20, false);
+        const userPlayer = players[0];
 
-        const ai = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), new THREE.MeshBasicMaterial({ color: 0x0000ff }));
-        ai.position.set(0, 1, -20);
-        scene.add(ai);
-
-        camera.position.set(0, 15, 30);
-
-        // 5. Logic
         const keys = {};
         let pScore = 0, aScore = 0;
         window.onkeydown = (e) => keys[e.code] = true;
@@ -52,44 +76,54 @@
         function animate() {
             requestAnimationFrame(animate);
 
-            // Move Player
-            if (keys['ArrowUp']) player.position.z -= 0.2;
-            if (keys['ArrowDown']) player.position.z += 0.2;
-            if (keys['ArrowLeft']) player.position.x -= 0.2;
-            if (keys['ArrowRight']) player.position.x += 0.2;
+            // CONTROLS
+            if (keys['ArrowUp']) userPlayer.position.z -= 0.2;
+            if (keys['ArrowDown']) userPlayer.position.z += 0.2;
+            if (keys['ArrowLeft']) userPlayer.position.x -= 0.2;
+            if (keys['ArrowRight']) userPlayer.position.x += 0.2;
 
-            // AI follow ball
-            if (ai.position.x < ball.position.x) ai.position.x += 0.1;
-            if (ai.position.x > ball.position.x) ai.position.x -= 0.1;
-            if (ai.position.z < ball.position.z) ai.position.z += 0.1;
-            if (ai.position.z > ball.position.z) ai.position.z -= 0.1;
+            // AI & BALL PHYSICS
+            players.forEach(p => {
+                if(!p.userData.isUser) {
+                    const speed = 0.08;
+                    if(p.position.x < ball.position.x) p.position.x += speed;
+                    else p.position.x -= speed;
+                    if(p.position.z < ball.position.z) p.position.z += speed;
+                    else p.position.z -= speed;
+                }
 
-            // Physics
-            [player, ai].forEach(p => {
+                // Dribble/Kick
                 if (p.position.distanceTo(ball.position) < 1.2) {
                     ballVel.x = (ball.position.x - p.position.x) * 0.3;
                     ballVel.z = (ball.position.z - p.position.z) * 0.3;
                 }
+
+                // Boundary Wall for Players
+                p.position.x = Math.max(-29, Math.min(29, p.position.x));
+                p.position.z = Math.max(-49, Math.min(49, p.position.z));
             });
 
             ball.position.add(ballVel);
-            ballVel.multiplyScalar(0.96); // Friction
+            ballVel.multiplyScalar(0.96);
 
-            // Score check
-            if (ball.position.z > 50) { aScore++; reset(); }
-            if (ball.position.z < -50) { pScore++; reset(); }
+            // Boundary Wall for Ball
+            if(Math.abs(ball.position.x) > 29) ballVel.x *= -1;
+            if(Math.abs(ball.position.z) > 49 && Math.abs(ball.position.x) > 6) ballVel.z *= -1;
+
+            // SCORING
+            if (ball.position.z > 50 && Math.abs(ball.position.x) < 6) { aScore++; reset(); }
+            if (ball.position.z < -50 && Math.abs(ball.position.x) < 6) { pScore++; reset(); }
             document.getElementById('pScore').innerText = pScore;
             document.getElementById('aScore').innerText = aScore;
 
-            camera.lookAt(player.position);
+            camera.position.lerp(new THREE.Vector3(userPlayer.position.x, 15, userPlayer.position.z + 20), 0.1);
+            camera.lookAt(userPlayer.position);
             renderer.render(scene, camera);
         }
 
         function reset() {
-            ball.position.set(0, 0.5, 0);
-            ballVel.set(0,0,0);
+            ball.position.set(0, 0.4, 0); ballVel.set(0,0,0);
         }
-
         animate();
     </script>
 </body>
