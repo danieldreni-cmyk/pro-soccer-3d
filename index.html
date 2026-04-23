@@ -1,16 +1,19 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>3D Soccer - Pro Evolution</title>
+    <title>3D Soccer - Pro Edition</title>
     <style>
-        body { margin: 0; background-color: #000; overflow: hidden; font-family: 'Arial Black', sans-serif; }
-        #scoreboard { position: absolute; top: 10px; width: 100%; text-align: center; color: white; font-size: 32px; z-index: 100; text-shadow: 2px 2px #000; }
+        body { margin: 0; background-color: #000; overflow: hidden; font-family: sans-serif; }
+        #scoreboard { position: absolute; top: 10px; width: 100%; text-align: center; color: white; font-size: 24px; z-index: 100; font-weight: bold; }
     </style>
 </head>
 <body>
     <div id="scoreboard">YOU: <span id="pScore">0</span> | AI: <span id="aScore">0</span></div>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+
     <script>
+        // 1. Scene Setup
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x87CEEB);
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -18,104 +21,73 @@
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
 
-        // LIGHTS
-        const ambient = new THREE.AmbientLight(0xffffff, 0.6); scene.add(ambient);
-        const sun = new THREE.DirectionalLight(0xffffff, 0.8); sun.position.set(10, 20, 10); scene.add(sun);
+        // 2. Pitch
+        const pitch = new THREE.Mesh(new THREE.PlaneGeometry(60, 100), new THREE.MeshBasicMaterial({ color: 0x2e7d32 }));
+        pitch.rotation.x = -Math.PI / 2;
+        scene.add(pitch);
 
-        // PITCH & LINES
-        const pitch = new THREE.Mesh(new THREE.PlaneGeometry(60, 100), new THREE.MeshStandardMaterial({ color: 0x2e7d32 }));
-        pitch.rotation.x = -Math.PI / 2; scene.add(pitch);
-        
-        const lineMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-        const midLine = new THREE.Mesh(new THREE.PlaneGeometry(60, 0.5), lineMat);
-        midLine.rotation.x = -Math.PI / 2; midLine.position.y = 0.01; scene.add(midLine);
-
-        // BALL
-        const ball = new THREE.Mesh(new THREE.SphereGeometry(0.4, 32, 32), new THREE.MeshStandardMaterial({ color: 0xffffff }));
-        ball.position.set(0, 0.4, 0); scene.add(ball);
+        // 3. Ball
+        const ball = new THREE.Mesh(new THREE.SphereGeometry(0.5, 16, 16), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+        ball.position.y = 0.5;
+        scene.add(ball);
         let ballVel = new THREE.Vector3();
 
-        // PLAYERS
-        function createPlayer(color, z) {
-            const group = new THREE.Group();
-            const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.4, 1), new THREE.MeshStandardMaterial({ color: color }));
-            body.position.y = 1; group.add(body);
-            group.position.set(0, 0, z);
-            scene.add(group);
-            return group;
-        }
-        const player = createPlayer(0xff0000, 20);
-        const ai = createPlayer(0x0000ff, -20);
+        // 4. Players
+        const player = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), new THREE.MeshBasicMaterial({ color: 0xff0000 }));
+        player.position.set(0, 1, 20);
+        scene.add(player);
 
-        // GOALS
-        function createGoal(z) {
-            const goal = new THREE.Mesh(new THREE.BoxGeometry(12, 5, 1), new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true }));
-            goal.position.set(0, 2.5, z); scene.add(goal);
-            return goal;
-        }
-        createGoal(50); createGoal(-50);
+        const ai = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), new THREE.MeshBasicMaterial({ color: 0x0000ff }));
+        ai.position.set(0, 1, -20);
+        scene.add(ai);
 
-        // STATE
+        camera.position.set(0, 15, 30);
+
+        // 5. Logic
         const keys = {};
         let pScore = 0, aScore = 0;
-        let isSliding = false;
         window.onkeydown = (e) => keys[e.code] = true;
         window.onkeyup = (e) => keys[e.code] = false;
 
         function animate() {
             requestAnimationFrame(animate);
 
-            // PLAYER MOVEMENT
-            let move = new THREE.Vector3(0,0,0);
-            if (keys['ArrowUp']) move.z -= 0.2;
-            if (keys['ArrowDown']) move.z += 0.2;
-            if (keys['ArrowLeft']) move.x -= 0.2;
-            if (keys['ArrowRight']) move.x += 0.2;
-            
-            // SLIDE TACKLE (D)
-            if (keys['KeyD'] && !isSliding) {
-                isSliding = true;
-                player.rotation.x = Math.PI / 3;
-                setTimeout(() => { player.rotation.x = 0; isSliding = false; }, 500);
-            }
-            player.position.add(move);
+            // Move Player
+            if (keys['ArrowUp']) player.position.z -= 0.2;
+            if (keys['ArrowDown']) player.position.z += 0.2;
+            if (keys['ArrowLeft']) player.position.x -= 0.2;
+            if (keys['ArrowRight']) player.position.x += 0.2;
 
-            // AI LOGIC (Simple Follow Ball)
-            const aiSpeed = 0.12;
-            if (ai.position.x < ball.position.x) ai.position.x += aiSpeed;
-            if (ai.position.x > ball.position.x) ai.position.x -= aiSpeed;
-            if (ai.position.z < ball.position.z) ai.position.z += aiSpeed;
-            if (ai.position.z > ball.position.z) ai.position.z -= aiSpeed;
+            // AI follow ball
+            if (ai.position.x < ball.position.x) ai.position.x += 0.1;
+            if (ai.position.x > ball.position.x) ai.position.x -= 0.1;
+            if (ai.position.z < ball.position.z) ai.position.z += 0.1;
+            if (ai.position.z > ball.position.z) ai.position.z -= 0.1;
 
-            // BALL PHYSICS & DRIBBLING
+            // Physics
             [player, ai].forEach(p => {
-                const dist = p.position.distanceTo(ball.position);
-                if (dist < 1.2) {
-                    let force = isSliding && p === player ? 0.8 : 0.15;
-                    ballVel.x = (ball.position.x - p.position.x) * force;
-                    ballVel.z = (ball.position.z - p.position.z) * force;
+                if (p.position.distanceTo(ball.position) < 1.2) {
+                    ballVel.x = (ball.position.x - p.position.x) * 0.3;
+                    ballVel.z = (ball.position.z - p.position.z) * 0.3;
                 }
             });
 
             ball.position.add(ballVel);
-            ballVel.multiplyScalar(0.95); // Friction
+            ballVel.multiplyScalar(0.96); // Friction
 
-            // SCORING
-            if (ball.position.z > 50) { aScore++; resetBall(); }
-            if (ball.position.z < -50) { pScore++; resetBall(); }
+            // Score check
+            if (ball.position.z > 50) { aScore++; reset(); }
+            if (ball.position.z < -50) { pScore++; reset(); }
             document.getElementById('pScore').innerText = pScore;
             document.getElementById('aScore').innerText = aScore;
 
-            camera.position.lerp(new THREE.Vector3(player.position.x, 12, player.position.z + 18), 0.1);
             camera.lookAt(player.position);
             renderer.render(scene, camera);
         }
 
-        function resetBall() {
-            ball.position.set(0, 0.4, 0);
+        function reset() {
+            ball.position.set(0, 0.5, 0);
             ballVel.set(0,0,0);
-            player.position.set(0,0,20);
-            ai.position.set(0,0,-20);
         }
 
         animate();
