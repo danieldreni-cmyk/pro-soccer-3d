@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>3D Soccer Starter</title>
+    <style> body { margin: 0; overflow: hidden; } </style>
+</head>
+<body>
+    <script type="module">
+        import * as THREE from 'https://cdn.skypack.dev/three@0.136.0';
+
+        // 1. Setup the World (Scene, Camera, Renderer)
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87CEEB); // Sky blue
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // 2. The Pitch (Grass)
+        const groundGeo = new THREE.PlaneGeometry(100, 100);
+        const groundMat = new THREE.MeshStandardMaterial({ color: 0x228B22 });
+        const ground = new THREE.Mesh(groundGeo, groundMat);
+        ground.rotation.x = -Math.PI / 2;
+        scene.add(ground);
+
+        // 3. The Player (A Capsule for now - FIFA style!)
+        const playerGeo = new THREE.CapsuleGeometry(0.5, 1, 4, 8);
+        const playerMat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+        const player = new THREE.Mesh(playerGeo, playerMat);
+        player.position.y = 1;
+        scene.add(player);
+
+        // 4. The Ball
+        const ballGeo = new THREE.SphereGeometry(0.3, 32, 32);
+        const ballMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
+        const ball = new THREE.Mesh(ballGeo, ballMat);
+        ball.position.set(2, 0.3, 0);
+        scene.add(ball);
+
+        // 5. Lighting
+        const light = new THREE.DirectionalLight(0xffffff, 1);
+        light.position.set(5, 10, 7.5);
+        scene.add(light);
+        scene.add(new THREE.AmbientLight(0x404040));
+
+        camera.position.set(0, 10, 15);
+        camera.lookAt(player.position);
+
+        // 6. Movement Logic
+        const keys = {};
+        window.addEventListener('keydown', (e) => keys[e.code] = true);
+        window.addEventListener('keyup', (e) => keys[e.code] = false);
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Move Player
+            if (keys['ArrowUp']) player.position.z -= 0.1;
+            if (keys['ArrowDown']) player.position.z += 0.1;
+            if (keys['ArrowLeft']) player.position.x -= 0.1;
+            if (keys['ArrowRight']) player.position.x += 0.1;
+
+            // Simple "Dribble" Logic (If player is close to ball, move ball)
+            const dist = player.position.distanceTo(ball.position);
+            if (dist < 1) {
+                ball.position.x += (ball.position.x - player.position.x) * 0.1;
+                ball.position.z += (ball.position.z - player.position.z) * 0.1;
+            }
+
+            // Camera follows player
+            camera.position.x = player.position.x;
+            camera.position.z = player.position.z + 10;
+            camera.lookAt(player.position);
+
+            renderer.render(scene, camera);
+        }
+        animate();
+    </script>
+</body>
+</html>
